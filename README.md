@@ -45,6 +45,7 @@ Pentru a face proiectul, aveti nevoie de:
 - O gaura in recipient pentru firele servo-motorului
 - Doua gauri in recipient pentru a prinde suportul servo-motorului de recipient
 - O gaura in suport pentru a prinde servo-motorul cu suportul
+
 Pentru gaura portului USB si a displayului, este recomandat sa folositi o pila patratica pentru a slefui gaurile, astfel incat sa fim siguri ca intra componentele in gaurile respective
 
 ## Pasul 4 - Atasam componentele in cutie (in afara de display)
