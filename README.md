@@ -71,7 +71,7 @@ Pentru gaura portului USB si a displayului, este recomandat sa folositi o pila p
   - Pentru conectivitate ai 3 optiuni:
     - Atasezi butoanele de breadboard, folosesti inca doua fire tata-tata pentru a transfera GND1 pe celelalte 2 butoane si lipesti breadboardul fix unde ai gaurile pentru butoane (trebuie 2 gauri pentru a prinde breadboardul de cutie)
     - Folosesti fire mama-tata sa conectezi porturile firelor cu pinii necesari
-    - Daca ai rude ce au butoane fancy de acum 40 de ani, folosesti fire tata-tata, un pistol de lipit si un voltmetru (pentru a va da seama care e GND si care e pentru pinul digital), si lipiti firele de pinii necesari (DISCLAIMER: Faceti acest lucru cu un adult sau cu o persoana ce are experienta in asta. Daca va raniti sau faceti conectiunile prost, va trebuie butoane noi)
+    - Daca ai rude ce au butoane fancy de acum 40 de ani, folosesti fire tata-tata, un pistol de lipit si un voltmetru (pentru a va da seama care e GND si care e pentru pinul digital), si lipiti firele de pinii necesari (DISCLAIMER: Faceti acest lucru cu un adult sau cu o persoana ce are experienta in asta. Daca va raniti sau faceti conexiunile prost, va trebuie butoane noi)
 - Pentru servo-motor
   - Strecuram firele necesare pentru conectarea servomotorului prin gaurile facute  
   - Vom folosi pinii de GND2, VCC2(5V) si pinul digital 3 si ii vom conecta cu firele tata-tata la porturile necesare pentru servo-motor
