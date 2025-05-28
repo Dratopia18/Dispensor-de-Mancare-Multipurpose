@@ -7,14 +7,14 @@
 #define LCD_ADDR 0x27
 
 // Definirea pinilor controllerului LCD
-#define LCD_EN 0x04  // Enable bit
-#define LCD_RW 0x02  // Read/Write bit
-#define LCD_RS 0x01  // Register select bit
-#define LCD_D4 0x10  // Data bit 4
-#define LCD_D5 0x20  // Data bit 5
-#define LCD_D6 0x40  // Data bit 6
-#define LCD_D7 0x80  // Data bit 7
-#define LCD_BACKLIGHT 0x08  // Backlight control bit
+#define LCD_EN 0x04
+#define LCD_RW 0x02
+#define LCD_RS 0x01
+#define LCD_D4 0x10
+#define LCD_D5 0x20
+#define LCD_D6 0x40
+#define LCD_D7 0x80
+#define LCD_BACKLIGHT 0x08
 
 // Comenzi LCD
 #define LCD_CLEAR_DISPLAY 0x01
@@ -36,16 +36,17 @@
 #define LCD_2LINE 0x08
 #define LCD_5x8DOTS 0x00
 
-// Definirea pinilor pentru servomotor și senzori
-#define SERVO_PIN PD3           // OC2B (Arduino digital pin 3)
-#define PROXIMITY_PIN PD4       // Arduino digital pin 4
-#define BTN_MODE_PIN PD5        // Button 1: Mode (Human/Animal)
-#define BTN_AMOUNT_PIN PD6      // Button 2: Food amount (LOW/MED/HIGH)
-#define BTN_COOLDOWN_PIN PD7    // Button 3: Cooldown time
+// === MODIFICARE PENTRU PWM HARDWARE ===
+// Schimbăm pinul servo pentru a folosi PWM hardware
+#define SERVO_PIN PB1               // OC1A (Arduino digital pin 9) - PWM hardware
+#define PROXIMITY_PIN PD4           // Arduino digital pin 4
+#define BTN_MODE_PIN PD5            // Button 1: Mode (Human/Animal)
+#define BTN_AMOUNT_PIN PD6          // Button 2: Food amount (LOW/MED/HIGH)
+#define BTN_COOLDOWN_PIN PD7        // Button 3: Cooldown time
 
-// Constante pentru servo
-#define SERVO_OPEN_ANGLE 180      // Unghi pentru deschis
-#define SERVO_CLOSE_ANGLE 0      // Unghi pentru închis
+// Constante pentru servo cu PWM hardware
+#define SERVO_OPEN_ANGLE 90         // Unghi pentru deschis (90 grade)
+#define SERVO_CLOSE_ANGLE 0         // Unghi pentru închis (0 grade)
 
 // Moduri de funcționare
 typedef enum {
@@ -67,9 +68,6 @@ const uint16_t humanCooldowns[] = {0, 5, 10, 15, 30, 45, 60};
 // Setări cooldown pentru animale (în minute)
 const uint16_t animalCooldowns[] = {30, 60, 120, 240, 480, 720};
 #define ANIMAL_COOLDOWN_COUNT 6
-
-// Timp per ciclu pentru toate modurile
-const uint16_t dispenseTimes[] = {1000, 1000, 1000}; // 1 secundă per ciclu
 
 // Setări pentru cicluri multiple
 const uint8_t foodCycles[] = {5, 10, 15};    // Numărul de cicluri pentru LOW, MEDIUM, HIGH
@@ -94,7 +92,8 @@ uint8_t totalCycles = 1;
 uint8_t cyclePhase = 0; // 0 = dispensing (open), 1 = closing
 
 // Declarații înainte - TOATE funcțiile
-void servo_set_angle(uint8_t angle);
+void servo_set_angle_hardware(uint8_t angle);
+void servo_init_hardware(void);
 void open_trap(void);
 void close_trap(void);
 void handle_buttons(void);
@@ -119,12 +118,73 @@ void uart_init(uint32_t baud);
 void uart_putchar(char c);
 void uart_print(const char *str);
 void delay_ms(uint16_t ms);
-void servo_init(void);
 void buttons_init(void);
 void proximity_init(void);
 uint8_t check_proximity(void);
 
-// Inițializare I2C
+// === PWM HARDWARE PENTRU SERVO (CONFORM LAB 3) - CU FIX PENTRU LCD ===
+
+void servo_enable_pwm(void) {
+    // Activează ieșirea PWM pe OC1A
+    TCCR1A |= (1 << COM1A1);  // Non-inverting mode
+}
+
+void servo_disable_pwm(void) {
+    // Dezactivează ieșirea PWM pe OC1A
+    TCCR1A &= ~(1 << COM1A1);
+    // Setează pin-ul manual la LOW pentru a opri servo-ul
+    PORTB &= ~(1 << SERVO_PIN);
+}
+
+void servo_init_hardware(void) {
+    // Configurare pin servo ca output (OC1A = PB1 = Arduino pin 9)
+    DDRB |= (1 << SERVO_PIN);
+    
+    // === CONFIGURARE TIMER1 PENTRU PWM HARDWARE ===
+    
+    // Configurare Fast PWM cu ICR1 ca TOP - DAR PWM DEZACTIVAT INIȚIAL
+    // WGM1[3:0] = 1110 (Fast PWM, TOP = ICR1)
+    TCCR1A = (1 << WGM11);            // WGM11 = 1, DAR fără COM1A1 încă
+    
+    TCCR1B = (1 << WGM13) |           // WGM13 = 1 (parte din Fast PWM mode 14)
+             (1 << WGM12) |           // WGM12 = 1 (parte din Fast PWM mode 14)
+             (1 << CS11);             // Prescaler = 8 (CS1[2:0] = 010)
+    
+    // Setează TOP pentru frecvența de 50Hz (perioada 20ms)
+    ICR1 = 39999;  // TOP value pentru 50Hz
+    
+    // Setează pin-ul manual la LOW (servo în repaus)
+    PORTB &= ~(1 << SERVO_PIN);
+    
+    // Inițializare servo la poziția închis cu PWM hardware
+    servo_set_angle_hardware(SERVO_CLOSE_ANGLE);
+    
+    uart_print("Servo initialized - PWM ready\r\n");
+}
+
+void servo_set_angle_hardware(uint8_t angle) {
+    // Limitare unghi la 0-90 grade pentru servo SG90
+    if (angle > 90) angle = 90;
+    
+    // Calculează valoarea OCR1A pentru unghiul dorit
+    // Pentru servo SG90: 1ms = 0°, 1.5ms = 45°, 2ms = 90°
+    uint16_t ocr_value = 2000 + ((uint32_t)angle * 2000) / 90;
+    OCR1A = ocr_value;
+    
+    // Activează PWM și trimite 10 pulsuri pentru stabilizare rapidă
+    // (similar cu PWM manual care făcea 10 repetări)
+    servo_enable_pwm();
+    
+    // 10 pulsuri la 50Hz = 10 * 20ms = 200ms
+    // Aceasta este echivalentul celor 10 repetări din PWM manual
+    delay_ms(200);  // Timpul necesar pentru 10 pulsuri PWM
+    
+    // Dezactivează PWM după stabilizare
+    servo_disable_pwm();
+}
+
+// === FUNCȚII I2C ===
+
 void i2c_init() {
     // Setează viteza la 100kHz (pentru cristal de 16MHz)
     TWSR = 0;
@@ -134,26 +194,24 @@ void i2c_init() {
     TWCR = (1<<TWEN);
 }
 
-// Începe transmisia I2C
 void i2c_start() {
     TWCR = (1<<TWINT) | (1<<TWSTA) | (1<<TWEN);
     while (!(TWCR & (1<<TWINT)));
 }
 
-// Oprește transmisia I2C
 void i2c_stop() {
     TWCR = (1<<TWINT) | (1<<TWEN) | (1<<TWSTO);
     _delay_us(50);  // Așteaptă să fie procesată
 }
 
-// Scrie un byte la I2C
 void i2c_write(uint8_t data) {
     TWDR = data;
     TWCR = (1<<TWINT) | (1<<TWEN);
     while (!(TWCR & (1<<TWINT)));
 }
 
-// Trimite un byte către LCD prin I2C
+// === FUNCȚII LCD ===
+
 void lcd_send_i2c(uint8_t data) {
     i2c_start();
     i2c_write(LCD_ADDR << 1);  // Adresa + Write bit (0)
@@ -161,7 +219,6 @@ void lcd_send_i2c(uint8_t data) {
     i2c_stop();
 }
 
-// Pulsează bitul Enable
 void lcd_pulse_enable(uint8_t data) {
     lcd_send_i2c(data | LCD_EN);  // Enable high
     _delay_us(1);                 // Așteaptă 1us
@@ -169,13 +226,11 @@ void lcd_pulse_enable(uint8_t data) {
     _delay_us(50);                // Așteaptă 50us
 }
 
-// Trimite 4 biți la LCD
 void lcd_write_4bits(uint8_t value) {
     lcd_send_i2c(value);
     lcd_pulse_enable(value);
 }
 
-// Trimite o comandă la LCD
 void lcd_command(uint8_t command) {
     // Trimite partea superioară
     lcd_write_4bits((command & 0xF0));
@@ -183,14 +238,12 @@ void lcd_command(uint8_t command) {
     lcd_write_4bits((command & 0x0F) << 4);
 }
 
-// Trimite date la LCD
 void lcd_write(uint8_t data) {
     // Setează RS pentru a indica date
     lcd_write_4bits(((data & 0xF0) | LCD_RS));
     lcd_write_4bits(((data & 0x0F) << 4) | LCD_RS);
 }
 
-// Afișează un număr pe LCD
 void lcd_print_number(uint16_t num) {
     char buffer[6];
     uint8_t i = 0;
@@ -210,7 +263,6 @@ void lcd_print_number(uint16_t num) {
     }
 }
 
-// Inițializare LCD
 void lcd_init() {
     _backlight = LCD_BACKLIGHT;  // Pornește backlight-ul
     
@@ -244,19 +296,16 @@ void lcd_init() {
     _delay_ms(2);
 }
 
-// Curăță display-ul
 void lcd_clear() {
     lcd_command(LCD_CLEAR_DISPLAY);
     _delay_ms(2);
 }
 
-// Mută cursorul la poziția (0,0)
 void lcd_home() {
     lcd_command(LCD_RETURN_HOME);
     _delay_ms(2);
 }
 
-// Poziționează cursorul la coordonatele specificate
 void lcd_set_cursor(uint8_t col, uint8_t row) {
     uint8_t row_offsets[] = { 0x00, 0x40, 0x14, 0x54 };
     if (row > 3) {
@@ -265,14 +314,14 @@ void lcd_set_cursor(uint8_t col, uint8_t row) {
     lcd_command(LCD_SET_DDRAM_ADDR | (col + row_offsets[row]));
 }
 
-// Afișează un șir de caractere
 void lcd_print(const char *str) {
     while (*str) {
         lcd_write(*str++);
     }
 }
 
-// Inițializare UART pentru debugging
+// === FUNCȚII UART ===
+
 void uart_init(uint32_t baud) {
     uint16_t baud_setting = (F_CPU / 8 / baud - 1) / 2;
     
@@ -287,7 +336,6 @@ void uart_init(uint32_t baud) {
     UCSR0C = (1<<UCSZ01) | (1<<UCSZ00);
 }
 
-// Trimite un caracter prin UART
 void uart_putchar(char c) {
     // Așteaptă până când buffer-ul de transmisie este gol
     while (!(UCSR0A & (1<<UDRE0)));
@@ -296,70 +344,24 @@ void uart_putchar(char c) {
     UDR0 = c;
 }
 
-// Trimite un șir prin UART
 void uart_print(const char *str) {
     while (*str) {
         uart_putchar(*str++);
     }
 }
 
-// Delay folosind timer pentru înlocuirea _delay_ms variabil
+// === FUNCȚII HELPER ===
+
 void delay_ms(uint16_t ms) {
     while (ms--) {
         _delay_ms(1);
     }
 }
 
-// Setează poziția servomotorului la un unghi specificat (0-90 grade)
-void servo_set_angle(uint8_t angle) {
-    // Limitare unghi la 0-90 grade pentru servo SG90
-    if (angle > 90) angle = 90;
-    
-    // Calculează lățimea pulsului pentru servo SG90
-    // 1ms = 0 grade, 1.5ms = 45 grade, 2ms = 90 grade
-    // Formula: pulse_width = 1000 + (angle * 1000) / 90 microsecunde
-    uint16_t pulse_width = 1000 + ((uint32_t)angle * 1000) / 90;
-    
-    // Controlul servo folosind generare manuală de PWM
-    uint8_t i;
-    for (i = 0; i < 10; i++) {  // Repetări pentru stabilitate
-        // Generează pulsul PWM
-        PORTD |= (1 << SERVO_PIN);   // HIGH
-        
-        // Folosește delay-uri precise pentru lățimea pulsului calculată
-        uint16_t delay_count = pulse_width;
-        while (delay_count--) {
-            _delay_us(1);
-        }
-        
-        PORTD &= ~(1 << SERVO_PIN);  // LOW
-        
-        // Completează perioada de 20ms (20000 - pulse_width)
-        uint16_t remaining_time = 20000 - pulse_width;
-        while (remaining_time >= 1000) {
-            _delay_ms(1);
-            remaining_time -= 1000;
-        }
-        if (remaining_time > 0) {
-            while (remaining_time--) {
-                _delay_us(1);
-            }
-        }
-    }
-}
+// === FUNCȚII LOGICĂ (MODIFICATE PENTRU PWM HARDWARE) ===
 
-// Inițializare servo
-void servo_init() {
-    // Setează pinul servomotorului ca ieșire
-    DDRD |= (1 << SERVO_PIN);
-    
-    // Inițializare servo la poziția închis
-    servo_set_angle(SERVO_CLOSE_ANGLE);
-}
-
-// Deschide trapa
 void open_trap() {
-    servo_set_angle(SERVO_OPEN_ANGLE);
+    servo_set_angle_hardware(SERVO_OPEN_ANGLE);  // ← PWM HARDWARE
     servoActive = 1;
     servoStartTime = 0;  // Resetăm contorul
     
@@ -377,15 +379,14 @@ void open_trap() {
     lcd_print("/");
     lcd_print_number(totalCycles);
     
-    uart_print("Trap opened for feeding - ");
+    uart_print("Trap opened - ");
     uart_print(currentAmount == FOOD_LOW ? "LOW (5 cycles)" : 
                currentAmount == FOOD_MEDIUM ? "MEDIUM (10 cycles)" : "HIGH (15 cycles)");
     uart_print("\r\n");
 }
 
-// Închide trapa
 void close_trap() {
-    servo_set_angle(SERVO_CLOSE_ANGLE);
+    servo_set_angle_hardware(SERVO_CLOSE_ANGLE);  // ← PWM HARDWARE
     servoActive = 0;
     
     // Reset variabile pentru cicluri
@@ -409,11 +410,10 @@ void close_trap() {
         
         // Afișează setările normale
         update_display();
-        uart_print("Trap closed - No cooldown mode (ready immediately)\r\n");
+        uart_print("Trap closed - No cooldown mode\r\n");
     }
 }
 
-// Obține timpul de cooldown curent în minute
 uint16_t get_current_cooldown() {
     if (currentMode == MODE_HUMAN) {
         return humanCooldowns[cooldownIndex];
@@ -422,14 +422,12 @@ uint16_t get_current_cooldown() {
     }
 }
 
-// Inițializare butoane
 void buttons_init() {
     // Configurare pini ca intrări cu pull-up intern
     DDRD &= ~((1 << BTN_MODE_PIN) | (1 << BTN_AMOUNT_PIN) | (1 << BTN_COOLDOWN_PIN));
     PORTD |= (1 << BTN_MODE_PIN) | (1 << BTN_AMOUNT_PIN) | (1 << BTN_COOLDOWN_PIN);
 }
 
-// Verifică și procesează apăsările de butoane
 void handle_buttons() {
     static uint8_t lastBtnState = 0xFF;
     uint8_t btnState = 0;
@@ -471,7 +469,6 @@ void handle_buttons() {
     lastBtnState = btnState;
 }
 
-// Actualizează display-ul în funcție de starea curentă
 void update_display() {
     lcd_clear();
     
@@ -505,7 +502,6 @@ void update_display() {
     }
 }
 
-// Inițializare senzor proximitate
 void proximity_init() {
     // Configurare pin de intrare pentru senzor (doar OUT)
     DDRD &= ~(1 << PROXIMITY_PIN);  // Setează ca intrare
@@ -514,28 +510,29 @@ void proximity_init() {
     uart_print("Proximity sensor initialized on PD4 (Active LOW)\r\n");
 }
 
-// Verifică starea senzorului de proximitate
 uint8_t check_proximity() {
     return (PIND & (1 << PROXIMITY_PIN)) ? 1 : 0;
 }
 
-// Funcția principală
+// === MAIN (LOGIC IDENTICĂ, DOAR PWM SCHIMBAT) ===
+
 int main(void) {
     // Inițializare componente
     uart_init(9600);
-    uart_print("Food Dispenser Starting (with no-cooldown option for HUMAN mode)...\r\n");
+    uart_print("Food Dispenser Starting...\r\n");
     
     i2c_init();
     lcd_init();
-    servo_init();
+    servo_init_hardware();  // ← PWM HARDWARE în loc de manual
     proximity_init();
     buttons_init();
     
     // Afișează setările inițiale
     update_display();
     
+    uart_print("System ready\r\n");
     
-    // Buclă principală
+    // Buclă principală (IDENTICĂ cu originalul)
     while (1) {
         // Procesează butoanele
         handle_buttons();
@@ -546,7 +543,7 @@ int main(void) {
             
             // Detectare front descrescător (tranziție de la 1 la 0) - obiect detectat
             if (!currentProximityState && lastProximityState) {
-                uart_print("Object detected! (Sensor LOW)\r\n");
+                uart_print("Object detected!\r\n");
                 open_trap();
             }
             
@@ -554,24 +551,24 @@ int main(void) {
             lastProximityState = currentProximityState;
         }
         
-        // Verifică ciclurile de dispensare (open-close-open-close pattern)
+        // Verifică ciclurile de dispensare (1s open - instant close pattern)
         if (servoActive) {
             servoStartTime++;
             
-            if (cyclePhase == 0) { // Faza de dispensing (servo open)
+            if (cyclePhase == 0) { // Faza de dispensing (servo open pentru 1 secundă)
                 if (servoStartTime > (CYCLE_TIME / 10)) {
-                    // După 1 secundă, închide servo instantaneu
-                    servo_set_angle(SERVO_CLOSE_ANGLE);
+                    // După 1 secundă, închide servo
+                    servo_set_angle_hardware(SERVO_CLOSE_ANGLE);
                     cyclePhase = 1; // Schimbă la closing
                     servoStartTime = 0;
                 }
-            } else { // Faza de closing (servo closed instantaneous)
-                // Închiderea este instantanee, trece imediat la următorul ciclu
+            } else { // Faza de closing (servo closed instantaneu)
+                // Închiderea este instantanee, trece IMEDIAT la următorul ciclu
                 currentCycle++;
                 if (currentCycle <= totalCycles) {
                     // Începe următorul ciclu imediat
-                    servo_set_angle(SERVO_OPEN_ANGLE);
-                    cyclePhase = 0; // Înapoi la dispensing
+                    servo_set_angle_hardware(SERVO_OPEN_ANGLE);
+                    cyclePhase = 0; // Înapoi la dispensing (va sta deschis 1 secundă)
                     servoStartTime = 0;
                     
                     // Actualizează LCD cu progresul
@@ -589,7 +586,7 @@ int main(void) {
             }
         }
         
-        // Gestionare perioadă cooldown
+        // Gestionare perioadă cooldown (IDENTICĂ)
         if (cooldownActive) {
             cooldownStartTime++;
             
