@@ -74,7 +74,7 @@ Pentru gaura portului USB si a displayului, este recomandat sa folositi o pila p
     - Daca ai rude ce au butoane fancy de acum 40 de ani, folosesti fire tata-tata, un pistol de lipit si un voltmetru (pentru a va da seama care e GND si care e pentru pinul digital), si lipiti firele de pinii necesari (DISCLAIMER: Faceti acest lucru cu un adult sau cu o persoana ce are experienta in asta. Daca va raniti sau faceti conexiunile prost, va trebuie butoane noi)
 - Pentru servo-motor
   - Strecuram firele necesare pentru conectarea servomotorului prin gaurile facute  
-  - Vom folosi pinii de GND2, VCC2(5V) si pinul digital 3 si ii vom conecta cu firele tata-tata la porturile necesare pentru servo-motor
+  - Vom folosi pinii de GND2, VCC2(5V) si pinul PB1 si ii vom conecta cu firele tata-tata la porturile necesare pentru servo-motor
 ## Pasul 6 - Alimentam dispozitivul
 Il conectam la laptop pentru a incarca codul scris de mine in dispozitiv
 
