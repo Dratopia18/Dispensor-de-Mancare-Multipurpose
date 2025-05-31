@@ -24,7 +24,7 @@ Pentru a face proiectul, aveti nevoie de:
 - Pentru placa, puneti-l lipit de un perete, ca sa avem access cat mai usor la portul USB al placii, ce alimenteaza dispozitivul
 - Pentru breadboarduri, lipiti-le oriunde vi se pare util (recomandat ar fi sa atasati conectiunile prin fire tata-tata sau mama-tata mai intai)
 - Pentru senzor si butoane, recomand sa faceti marcaje cu o carioca/creion pe cutie, unde vi se pare ca ar trebui puse componentele (puneti componentele fata in fata cu pozitia unde le veti pune mai tarziu pentru un parcurs mai usor)
-- Pentru display, desenati un dreptunghi de 16 cm lungime si 2 cm latime in locul unde va fi pozitionat displayul (recomandat ar fi sa fie fix langa butoane si senzor) si doua marcaje pe unde veti prinde displayul de cutie cu suruburi (recomandarea ar fi ca aceste marcaje sa fie diagonal opuse una de cealalta)
+- Pentru display, desenati un dreptunghi de 6.5 cm lungime si 2.5 cm latime in locul unde va fi pozitionat displayul (recomandat ar fi sa fie fix langa butoane si senzor) si doua marcaje pe unde veti prinde displayul de cutie cu suruburi (recomandarea ar fi ca aceste marcaje sa fie diagonal opuse una de cealalta)
 - Pentru servo-motor, trebuie facute:
   - Un marcaj in cutie pentru firele servo-motorului
   - Un marcaj in recipient pentru firele servo-motorului
